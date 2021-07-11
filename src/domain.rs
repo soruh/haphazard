@@ -16,7 +16,8 @@ impl Global {
     }
 }
 
-static SHARED_DOMAIN: HazPtrDomain<Global> = HazPtrDomain::new(DomainId::global(), &Global::new());
+static SHARED_DOMAIN: HazPtrDomain<Global> =
+    HazPtrDomain::with_id(DomainId::global(), &Global::new());
 
 mod domain_id {
     use super::*;
@@ -101,7 +102,7 @@ macro_rules! unique_domain {
 }
 
 impl<F> HazPtrDomain<F> {
-    pub const fn new(id: DomainId, _: &F) -> Self {
+    pub const fn with_id(id: DomainId, _: &F) -> Self {
         Self {
             hazptrs: HazPtrs {
                 head: AtomicPtr::new(std::ptr::null_mut()),
@@ -118,8 +119,8 @@ impl<F> HazPtrDomain<F> {
         }
     }
 
-    pub fn next(familiy: &F) -> Self {
-        Self::new(DomainId::next(), familiy)
+    pub fn new(familiy: &F) -> Self {
+        Self::with_id(DomainId::next(), familiy)
     }
 
     pub fn id(&self) -> &DomainId {

@@ -93,8 +93,8 @@ fn feels_good() {
 #[test]
 #[should_panic]
 fn feels_bad() {
-    let dw = HazPtrDomain::next(&());
-    let dr = HazPtrDomain::next(&());
+    let dw = HazPtrDomain::new(&());
+    let dr = HazPtrDomain::new(&());
 
     let drops_42 = Arc::new(AtomicUsize::new(0));
 
@@ -112,7 +112,7 @@ fn feels_bad() {
 fn atomic_ptr_as_object_ref() {
     let drops = Arc::new(AtomicUsize::new(0));
 
-    let domain = HazPtrDomain::next(&());
+    let domain = HazPtrDomain::new(&());
 
     let mut hx = HazPtrHolder::for_domain(&domain);
     let mut hy = HazPtrHolder::for_domain(&domain);
