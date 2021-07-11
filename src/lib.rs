@@ -29,5 +29,7 @@ pub use domain::Global;
 pub use deleter::{deleters, Deleter, Reclaim};
 pub use domain::HazPtrDomain;
 pub use holder::HazPtrHolder;
-pub use object::{HazPtrObject, HazPtrObjectWrapper};
+pub use object::{
+    AtomicBox, HazPtrObject, HazPtrObjectRef, HazPtrObjectRefExt, HazPtrObjectWrapper,
+};
 pub use ptr::HazPtr;

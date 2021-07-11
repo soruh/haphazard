@@ -16,7 +16,66 @@ impl Global {
     }
 }
 
-static SHARED_DOMAIN: HazPtrDomain<Global> = HazPtrDomain::new(&Global::new());
+static SHARED_DOMAIN: HazPtrDomain<Global> = HazPtrDomain::new(DomainId::global(), &Global::new());
+
+mod domain_id {
+    use super::*;
+
+    #[derive(Debug, PartialEq, Eq)]
+    pub struct DomainId(u64);
+
+    impl DomainId {
+        pub const fn global() -> Self {
+            Self(0)
+        }
+
+        pub fn next() -> Self {
+            static CURRENT: AtomicU64 = AtomicU64::new(1);
+
+            Self(CURRENT.fetch_add(1, Ordering::Relaxed))
+        }
+
+        pub unsafe fn duplicate(&self) -> Self {
+            Self(self.0)
+        }
+    }
+}
+mod dummy_domain_id {
+
+    #[derive(Debug)]
+    pub struct DummyDomainId;
+
+    impl PartialEq for DummyDomainId {
+        #[inline]
+        fn eq(&self, _: &Self) -> bool {
+            true
+        }
+    }
+
+    impl Eq for DummyDomainId {}
+
+    impl DummyDomainId {
+        pub const fn global() -> Self {
+            Self
+        }
+
+        pub fn next() -> Self {
+            Self
+        }
+
+        pub unsafe fn duplicate(&self) -> Self {
+            Self
+        }
+    }
+
+    pub type DomainId = DummyDomainId;
+}
+
+#[cfg(not(no_check))]
+pub use domain_id::DomainId;
+
+#[cfg(no_check)]
+pub use dummy_domain_id::DomainId;
 
 // Holds linked list of HazPtrs
 pub struct HazPtrDomain<F> {
@@ -25,6 +84,7 @@ pub struct HazPtrDomain<F> {
     family: PhantomData<F>,
     sync_time: AtomicU64,
     nbulk_reclaims: AtomicUsize,
+    id: DomainId,
 }
 
 impl HazPtrDomain<Global> {
@@ -41,7 +101,7 @@ macro_rules! unique_domain {
 }
 
 impl<F> HazPtrDomain<F> {
-    pub const fn new(_: &F) -> Self {
+    pub const fn new(id: DomainId, _: &F) -> Self {
         Self {
             hazptrs: HazPtrs {
                 head: AtomicPtr::new(std::ptr::null_mut()),
@@ -54,7 +114,16 @@ impl<F> HazPtrDomain<F> {
             sync_time: AtomicU64::new(0),
             nbulk_reclaims: AtomicUsize::new(0),
             family: PhantomData,
+            id,
         }
+    }
+
+    pub fn next(familiy: &F) -> Self {
+        Self::new(DomainId::next(), familiy)
+    }
+
+    pub fn id(&self) -> &DomainId {
+        &self.id
     }
 
     pub(crate) fn acquire(&self) -> &HazPtr {
