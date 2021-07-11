@@ -428,7 +428,12 @@ impl<F> HazPtrDomain<F> {
     }
 
     pub fn eager_reclaim(&self) -> usize {
-        self.bulk_reclaim(true)
+        let n_reclaimed = self.bulk_reclaim(true);
+        // TODO: this can probably be `Ordering::Relaxed`
+        self.retired
+            .count
+            .fetch_sub(n_reclaimed as isize, Ordering::SeqCst);
+        n_reclaimed
     }
 
     pub(crate) fn release(&self, hazard: &HazPtr) {
