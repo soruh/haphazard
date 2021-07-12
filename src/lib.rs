@@ -24,8 +24,6 @@ fn asymmetric_heavy_barrier(_: HeavyBarrierKind) {
     std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
 }
 
-pub use domain::Global;
-
 pub use deleter::{deleters, Deleter, Reclaim};
 pub use domain::HazPtrDomain;
 pub use holder::HazPtrHolder;

@@ -20,7 +20,7 @@ fn feels_good() {
     let drops_42 = Arc::new(AtomicUsize::new(0));
 
     let x = HazPtrObjectWrapper::with_global_domain((42, CountDrops(Arc::clone(&drops_42))))
-        .into_ref::<AtomicBox<_, _>>();
+        .into_ref::<AtomicBox<_>>();
 
     // As a reader:
     let mut h = HazPtrHolder::global();
@@ -52,7 +52,7 @@ fn feels_good() {
 
     // As a writer:
     let drops_9001 = Arc::new(AtomicUsize::new(0));
-    let old: AtomicBox<_, _> = x.replace(
+    let old: AtomicBox<_> = x.replace(
         HazPtrObjectWrapper::with_global_domain((9001, CountDrops(Arc::clone(&drops_9001)))),
         std::sync::atomic::Ordering::SeqCst,
     );
@@ -93,13 +93,13 @@ fn feels_good() {
 #[test]
 #[should_panic]
 fn feels_bad() {
-    let dw = HazPtrDomain::new(&());
-    let dr = HazPtrDomain::new(&());
+    let dw = HazPtrDomain::new();
+    let dr = HazPtrDomain::new();
 
     let drops_42 = Arc::new(AtomicUsize::new(0));
 
     let x = HazPtrObjectWrapper::with_domain(&dw, (42, CountDrops(Arc::clone(&drops_42))))
-        .into_ref::<AtomicBox<_, _>>();
+        .into_ref::<AtomicBox<_>>();
 
     // Reader uses a different domain thant the writer!
     let mut h = HazPtrHolder::for_domain(&dr);
@@ -112,7 +112,7 @@ fn feels_bad() {
 fn atomic_ptr_as_object_ref() {
     let drops = Arc::new(AtomicUsize::new(0));
 
-    let domain = HazPtrDomain::new(&());
+    let domain = HazPtrDomain::new();
 
     let mut hx = HazPtrHolder::for_domain(&domain);
     let mut hy = HazPtrHolder::for_domain(&domain);

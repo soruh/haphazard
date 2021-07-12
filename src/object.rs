@@ -5,11 +5,11 @@ use std::{
     sync::atomic::{AtomicPtr, Ordering},
 };
 
-pub trait HazPtrObject<'domain, F: 'static>
+pub trait HazPtrObject<'domain>
 where
     Self: Sized + 'domain,
 {
-    fn domain(&self) -> &'domain HazPtrDomain<F>;
+    fn domain(&self) -> &'domain HazPtrDomain;
 
     /// # Safety
     ///
@@ -29,15 +29,15 @@ where
 
     fn into_ref<R>(self) -> R
     where
-        R: HazPtrObjectRefExt<'domain, F, Self>,
+        R: HazPtrObjectRefExt<'domain, Self>,
     {
         HazPtrObjectRefExt::create(self)
     }
 }
 
-pub trait HazPtrObjectRef<'domain, F: 'static, O>
+pub trait HazPtrObjectRef<'domain, O>
 where
-    O: HazPtrObject<'domain, F>,
+    O: HazPtrObject<'domain>,
 {
     fn domain_id(&self) -> Option<&DomainId>;
     // TODO: make these messages more explicit:
@@ -53,9 +53,9 @@ where
     unsafe fn ptr_mut(&mut self) -> &mut AtomicPtr<O>;
 }
 
-pub trait HazPtrObjectRefExt<'domain, F: 'static, O>: HazPtrObjectRef<'domain, F, O>
+pub trait HazPtrObjectRefExt<'domain, O>: HazPtrObjectRef<'domain, O>
 where
-    O: HazPtrObject<'domain, F>,
+    O: HazPtrObject<'domain>,
 {
     fn deleter(&self) -> &'static dyn Deleter;
     fn create(object: O) -> Self;
@@ -106,18 +106,18 @@ where
     }
 }
 
-pub struct AtomicBox<'domain, F: 'static, O>
+pub struct AtomicBox<'domain, O>
 where
-    O: HazPtrObject<'domain, F>,
+    O: HazPtrObject<'domain>,
 {
     ptr: AtomicPtr<O>,
     domain_id: DomainId,
-    _phantom: PhantomData<&'domain F>,
+    _phantom: PhantomData<&'domain ()>,
 }
 
-impl<'domain, F: 'static, O> HazPtrObjectRef<'domain, F, O> for AtomicBox<'domain, F, O>
+impl<'domain, O> HazPtrObjectRef<'domain, O> for AtomicBox<'domain, O>
 where
-    O: HazPtrObject<'domain, F>,
+    O: HazPtrObject<'domain>,
 {
     fn domain_id(&self) -> Option<&DomainId> {
         Some(&self.domain_id)
@@ -132,9 +132,9 @@ where
     }
 }
 
-impl<'domain, F: 'static, O> HazPtrObjectRefExt<'domain, F, O> for AtomicBox<'domain, F, O>
+impl<'domain, O> HazPtrObjectRefExt<'domain, O> for AtomicBox<'domain, O>
 where
-    O: HazPtrObject<'domain, F>,
+    O: HazPtrObject<'domain>,
 {
     fn deleter(&self) -> &'static dyn Deleter {
         &deleters::drop_box
@@ -144,15 +144,14 @@ where
         Self {
             domain_id: unsafe { object.domain().id().duplicate() },
             ptr: AtomicPtr::new(Box::into_raw(Box::new(object))),
-
             _phantom: PhantomData,
         }
     }
 }
 
-impl<'domain, F: 'static, O> HazPtrObjectRef<'domain, F, O> for AtomicPtr<O>
+impl<'domain, O> HazPtrObjectRef<'domain, O> for AtomicPtr<O>
 where
-    O: HazPtrObject<'domain, F>,
+    O: HazPtrObject<'domain>,
 {
     fn domain_id(&self) -> Option<&DomainId> {
         None
@@ -167,39 +166,37 @@ where
     }
 }
 
-pub struct HazPtrObjectWrapper<'domain, T, F> {
+pub struct HazPtrObjectWrapper<'domain, T> {
     inner: T,
-    domain: &'domain HazPtrDomain<F>,
+    domain: &'domain HazPtrDomain,
 }
 
-impl<T> HazPtrObjectWrapper<'static, T, crate::Global> {
+impl<T> HazPtrObjectWrapper<'static, T> {
     pub fn with_global_domain(t: T) -> Self {
         HazPtrObjectWrapper::with_domain(HazPtrDomain::global(), t)
     }
 }
 
-impl<'domain, T, F> HazPtrObjectWrapper<'domain, T, F> {
-    pub fn with_domain(domain: &'domain HazPtrDomain<F>, t: T) -> Self {
+impl<'domain, T> HazPtrObjectWrapper<'domain, T> {
+    pub fn with_domain(domain: &'domain HazPtrDomain, t: T) -> Self {
         Self { inner: t, domain }
     }
 }
 
-impl<'domain, T: 'domain, F: 'static> HazPtrObject<'domain, F>
-    for HazPtrObjectWrapper<'domain, T, F>
-{
-    fn domain(&self) -> &'domain HazPtrDomain<F> {
+impl<'domain, T: 'domain> HazPtrObject<'domain> for HazPtrObjectWrapper<'domain, T> {
+    fn domain(&self) -> &'domain HazPtrDomain {
         self.domain
     }
 }
 
-impl<T, F> Deref for HazPtrObjectWrapper<'_, T, F> {
+impl<T> Deref for HazPtrObjectWrapper<'_, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl<T, F> DerefMut for HazPtrObjectWrapper<'_, T, F> {
+impl<T> DerefMut for HazPtrObjectWrapper<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }

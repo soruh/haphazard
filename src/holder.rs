@@ -2,12 +2,12 @@ use crate::HazPtrObjectRef;
 use crate::{HazPtr, HazPtrDomain, HazPtrObject};
 use std::sync::atomic::Ordering;
 
-pub struct HazPtrHolder<'domain, F> {
+pub struct HazPtrHolder<'domain> {
     hazard: &'domain HazPtr,
-    domain: &'domain HazPtrDomain<F>,
+    domain: &'domain HazPtrDomain,
 }
 
-impl HazPtrHolder<'static, crate::Global> {
+impl HazPtrHolder<'static> {
     pub fn global() -> Self {
         HazPtrHolder::for_domain(HazPtrDomain::global())
     }
@@ -53,8 +53,8 @@ macro_rules! try_protect_actual {
                 // let's hope this check catches the error (it may not).
                 if $src_domain.is_none() {
                     debug_assert_eq!(
-                        $self.domain as *const HazPtrDomain<F>,
-                        r.domain() as *const HazPtrDomain<F>,
+                        $self.domain as *const HazPtrDomain,
+                        r.domain() as *const HazPtrDomain,
                         "object guarded by different domain than holder used to access it"
                     );
                 }
@@ -65,8 +65,8 @@ macro_rules! try_protect_actual {
     }};
 }
 
-impl<'domain, F> HazPtrHolder<'domain, F> {
-    pub fn for_domain(domain: &'domain HazPtrDomain<F>) -> Self {
+impl<'domain> HazPtrHolder<'domain> {
+    pub fn for_domain(domain: &'domain HazPtrDomain) -> Self {
         Self {
             hazard: domain.acquire(),
             domain,
@@ -82,10 +82,9 @@ impl<'domain, F> HazPtrHolder<'domain, F> {
     /// associated with.
     pub unsafe fn protect<'l, 'o, O, R>(&'l mut self, src: &'_ R) -> Option<&'l O>
     where
-        O: HazPtrObject<'o, F>,
+        O: HazPtrObject<'o>,
         'o: 'l,
-        F: 'static,
-        R: HazPtrObjectRef<'o, F, O>,
+        R: HazPtrObjectRef<'o, O>,
     {
         // We are only reading the pointer in `src.ptr`
         let src_ptr = unsafe { src.ptr() };
@@ -117,10 +116,9 @@ impl<'domain, F> HazPtrHolder<'domain, F> {
         src: &'_ R,
     ) -> Result<Option<&'l O>, *mut O>
     where
-        O: HazPtrObject<'o, F>,
         'o: 'l,
-        F: 'static,
-        R: HazPtrObjectRef<'o, F, O>,
+        O: HazPtrObject<'o>,
+        R: HazPtrObjectRef<'o, O>,
     {
         // We are only reading the pointer in `src.ptr`
         let src_ptr = unsafe { src.ptr() };
@@ -134,7 +132,7 @@ impl<'domain, F> HazPtrHolder<'domain, F> {
     }
 }
 
-impl<F> Drop for HazPtrHolder<'_, F> {
+impl Drop for HazPtrHolder<'_> {
     fn drop(&mut self) {
         self.hazard.reset();
         self.domain.release(self.hazard);

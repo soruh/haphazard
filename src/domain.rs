@@ -1,6 +1,5 @@
 use crate::{Deleter, HazPtr, Reclaim};
 use std::collections::HashSet;
-use std::marker::PhantomData;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicPtr, AtomicU64, AtomicUsize};
 
@@ -8,16 +7,7 @@ const SYNC_TIME_PERIOD: u64 = std::time::Duration::from_nanos(2000000000).as_nan
 const RCOUNT_THRESHOLD: isize = 1000;
 const HCOUNT_MULTIPLIER: isize = 2;
 
-#[non_exhaustive]
-pub struct Global;
-impl Global {
-    const fn new() -> Self {
-        Global
-    }
-}
-
-static SHARED_DOMAIN: HazPtrDomain<Global> =
-    HazPtrDomain::with_id(DomainId::global(), &Global::new());
+static SHARED_DOMAIN: HazPtrDomain = HazPtrDomain::with_id(DomainId::global());
 
 mod domain_id {
     use super::*;
@@ -79,19 +69,12 @@ pub use domain_id::DomainId;
 pub use dummy_domain_id::DomainId;
 
 // Holds linked list of HazPtrs
-pub struct HazPtrDomain<F> {
+pub struct HazPtrDomain {
     hazptrs: HazPtrs,
     retired: RetiredList,
-    family: PhantomData<F>,
     sync_time: AtomicU64,
     nbulk_reclaims: AtomicUsize,
     id: DomainId,
-}
-
-impl HazPtrDomain<Global> {
-    pub fn global() -> &'static Self {
-        &SHARED_DOMAIN
-    }
 }
 
 #[macro_export]
@@ -101,8 +84,12 @@ macro_rules! unique_domain {
     };
 }
 
-impl<F> HazPtrDomain<F> {
-    pub const fn with_id(id: DomainId, _: &F) -> Self {
+impl HazPtrDomain {
+    pub fn global() -> &'static Self {
+        &SHARED_DOMAIN
+    }
+
+    pub const fn with_id(id: DomainId) -> Self {
         Self {
             hazptrs: HazPtrs {
                 head: AtomicPtr::new(std::ptr::null_mut()),
@@ -114,13 +101,13 @@ impl<F> HazPtrDomain<F> {
             },
             sync_time: AtomicU64::new(0),
             nbulk_reclaims: AtomicUsize::new(0),
-            family: PhantomData,
+
             id,
         }
     }
 
-    pub fn new(familiy: &F) -> Self {
-        Self::with_id(DomainId::next(), familiy)
+    pub fn new() -> Self {
+        Self::with_id(DomainId::next())
     }
 
     pub fn id(&self) -> &DomainId {
@@ -441,7 +428,7 @@ impl<F> HazPtrDomain<F> {
     }
 }
 
-impl<F> Drop for HazPtrDomain<F> {
+impl Drop for HazPtrDomain {
     fn drop(&mut self) {
         // There should be no hazard pointers active, so all retired objects can be reclaimed.
         let nretired = *self.retired.count.get_mut();
@@ -478,8 +465,8 @@ impl Retired {
     /// # Safety
     ///
     /// `ptr` will not be accessed after `'domain` ends.
-    unsafe fn new<'domain, F>(
-        _: &'domain HazPtrDomain<F>,
+    unsafe fn new<'domain>(
+        _: &'domain HazPtrDomain,
         ptr: *mut (dyn Reclaim + 'domain),
         deleter: &'static dyn Deleter,
     ) -> Self {
